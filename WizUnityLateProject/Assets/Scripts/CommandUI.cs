@@ -19,6 +19,9 @@ public class CommandUI : MonoBehaviour
     // 待機フラグ
     [SerializeField]
     private bool m_bWait = false;
+    // ターンエンドフラグ
+    [SerializeField]
+    private bool m_bTurnEnd = false;
     // 移動中フラグ
     [SerializeField]
     private bool m_bMove = false;
@@ -38,8 +41,8 @@ public class CommandUI : MonoBehaviour
         // Aを押した瞬間
         if(Input.GetButtonDown("Fire1") && !m_bLateTimeStart)
         {
-            // 待機ならもうメニューが出ないように
-            if (!m_bWait)
+            // 待機またはターン終了していないなら処理する （待機またはターン終了ならもうメニューが出ないように）
+            if (!m_bWait && !m_bTurnEnd)
             {
                 // メニューが何もアクティブになっていないかつ行動していなかったら
                 if (!m_uiManager.GetCurrentMenu() && !m_bMove)
@@ -121,7 +124,7 @@ public class CommandUI : MonoBehaviour
         if(!m_bWait)
         {
             // 選べないボタンのカラー変更
-            m_uiManager.SetEndButtonColor("MoveButton");
+            m_uiManager.SetEndButtonColor("WaitButton");
             //全メニューを非アクティブにする
             m_uiManager.NotActiveAllMenu();
 
@@ -129,6 +132,23 @@ public class CommandUI : MonoBehaviour
             // 待機に
             m_bWait = true;
             Debug.Log("待機しました");
+        }
+    }
+
+    // ターン終了ボタンを押したとき
+    public void OnTurnEndButtonClick()
+    {
+        if (!m_bTurnEnd)
+        {
+            // 選べないボタンのカラー変更
+            m_uiManager.SetEndButtonColor("TurnEndButton");
+            //全メニューを非アクティブにする
+            m_uiManager.NotActiveAllMenu();
+
+            m_bLateTimeStart = true;
+            // ターン終了
+            m_bTurnEnd = true;
+            Debug.Log("ターン終了です");
         }
     }
 
