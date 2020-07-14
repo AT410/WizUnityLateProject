@@ -103,7 +103,7 @@ public class GameStageManagerScript: MonoBehaviour
 
     //キャラクターのいるマップデータ
     //m_characterMapID[A][B]
-    // A = プレイヤーID、　B = 場にいるキャラクター
+    // A = プレイヤーID、　B = キャラクタの数
     public List<List<uint>> m_characterMapID = new List<List<uint>>();
 
     public CharacterCommandData m_nowCommandData = new CharacterCommandData();
@@ -154,6 +154,12 @@ public class GameStageManagerScript: MonoBehaviour
         return m_nowCommandData = m_characterCommandData[(int)m_playerTurnNum][(int)m_choiceCharacterID];
     }
 
+    void Awake()
+    {
+        CreateCharacterData();
+        CreateCharacterMapID();
+    }
+
     /// <summary>
     /// 処理
     /// </summary>
@@ -164,9 +170,7 @@ public class GameStageManagerScript: MonoBehaviour
 
         m_mapPosData = m_sp_MapGenerator.m_mapPosData;
 
-        CreateCharacterData();
         CreateCharacterCommandData();
-        CreateCharacterMapID();
         CreateMapCost();
         DebugCreateMapData();
     }
@@ -218,12 +222,12 @@ public class GameStageManagerScript: MonoBehaviour
             {
                 //デバッグ用のキャラクターの見た目を追加
                 m_characterMapID[i].Add(m_debugCharacterMapID[j + i * m_maxPlayerNum]);
-                GameObject obj = Instantiate(m_character, new Vector3(
-                    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].x,
-                    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].y, 0.0f), 
-                    new Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
+                //GameObject obj = Instantiate(m_character, new Vector3(
+                //    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].x,
+                //    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].y, 0.0f), 
+                //    new Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
 
-                m_characterObj[i].Add(obj);
+                //m_characterObj[i].Add(obj);
             }
         }
     }
