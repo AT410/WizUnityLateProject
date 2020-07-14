@@ -29,6 +29,13 @@ namespace DataBase {
         Event,      //イベントがある
     }
 
+    public enum EN_MapCost
+    {
+        Default = -1,
+        Forest = -2,
+        NoEntry = -10,
+    }
+
     [System.Serializable]
     public struct CharacterData
     {
@@ -49,6 +56,13 @@ namespace DataBase {
         public bool bAttacked;
         public bool bMoved;
         public bool bWaiting;
+
+        public CharacterCommandData(bool attacked, bool moved, bool waiting)
+        {
+            bAttacked = attacked;
+            bMoved = moved;
+            bWaiting = waiting;
+        }
     }
 }
 
@@ -58,26 +72,44 @@ public class GameStageManagerScript: MonoBehaviour
     GameObject m_mapDataManagerObj;
     [SerializeField]
     GameObject m_playerMapDataManagerObj;
+    [SerializeField]
+    GameObject m_character;
+
+    List<List<GameObject>> m_characterObj = new List<List<GameObject>>();
 
     [SerializeField]
     List<int> m_mapDate;
+
+    List<Vector2> m_mapPosData;
 
     [Header("キャラクターデータ")] [SerializeField]
     List<DataBase.CharacterData> m_debugCharacterData;
     [SerializeField]
     List<uint> m_debugCharacterMapID;
 
-    
     [SerializeField]
-    List<List<DataBase.CharacterData>> m_characterData = new List<List<DataBase.CharacterData>>();
+    List<int> m_mapCost;
+
+    [Header("アクションの有効範囲")] [SerializeField]
+    List<int> m_actionCostMap;
+
     [SerializeField]
-    List<List<DataBase.CharacterCommandData>> m_characterCommandData;
+    List<Vector2> m_canMoveMapID;
+
+    //[SerializeField]
+    public List<List<DataBase.CharacterData>> m_characterData = new List<List<DataBase.CharacterData>>();
+    [SerializeField]
+    List<List<DataBase.CharacterCommandData>> m_characterCommandData = new List<List<DataBase.CharacterCommandData>>();
 
     //キャラクターのいるマップデータ
-    List<List<uint>> m_characterMapID = new List<List<uint>>();
+    //m_characterMapID[A][B]
+    // A = プレイヤーID、　B = 場にいるキャラクター
+    public List<List<uint>> m_characterMapID = new List<List<uint>>();
+
+    public CharacterCommandData m_nowCommandData = new CharacterCommandData();
 
     [Header("マネージャースクリプト")]
-    public MapGeneratorScript m_sp_MapDataManager;
+    public MapGeneratorScript m_sp_MapGenerator;
     [SerializeField]
     public UIManager m_sp_UIManager;
 
@@ -116,6 +148,11 @@ public class GameStageManagerScript: MonoBehaviour
         get { return m_menuStateNum; }
         set { m_menuStateNum = value; }
     }
+   
+    public CharacterCommandData GetCharacterCommandData()
+    {
+        return m_nowCommandData = m_characterCommandData[(int)m_playerTurnNum][(int)m_choiceCharacterID];
+    }
 
     /// <summary>
     /// 処理
@@ -123,10 +160,14 @@ public class GameStageManagerScript: MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        m_sp_MapDataManager = m_mapDataManagerObj.GetComponent<MapGeneratorScript>();
+        m_sp_MapGenerator = m_mapDataManagerObj.GetComponent<MapGeneratorScript>();
+
+        m_mapPosData = m_sp_MapGenerator.m_mapPosData;
+
         CreateCharacterData();
         CreateCharacterCommandData();
         CreateCharacterMapID();
+        CreateMapCost();
         DebugCreateMapData();
     }
 
@@ -154,16 +195,12 @@ public class GameStageManagerScript: MonoBehaviour
     //キャラクターのコマンドデータをマネージャーに作成
     void CreateCharacterCommandData()
     {
-        m_characterCommandData = new List<List<DataBase.CharacterCommandData>>();
         for (int i = 0; i < m_maxPlayerNum; i++)
         {
             m_characterCommandData.Add(new List<DataBase.CharacterCommandData>());
 
             for (int j = 0; j < m_maxCharacterNum; j++)
             {
-                //DataBase.CharacterData charaData = new DataBase.CharacterData();
-
-                //デバッグ用のデータを追加
                 m_characterCommandData[i].Add(new DataBase.CharacterCommandData());
             }
         }
@@ -175,18 +212,147 @@ public class GameStageManagerScript: MonoBehaviour
         for (int i = 0; i < m_maxPlayerNum; i++)
         {
             m_characterMapID.Add(new List<uint>());
+            m_characterObj.Add(new List<GameObject>());
 
             for (int j = 0; j < m_maxCharacterNum; j++)
             {
-                //デバッグ用のデータを追加
+                //デバッグ用のキャラクターの見た目を追加
                 m_characterMapID[i].Add(m_debugCharacterMapID[j + i * m_maxPlayerNum]);
+                GameObject obj = Instantiate(m_character, new Vector3(
+                    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].x,
+                    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].y, 0.0f), 
+                    new Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
+
+                m_characterObj[i].Add(obj);
             }
+        }
+    }
+
+    //マップのコストをマネージャーに作成
+    void CreateMapCost()
+    {
+        for (int i = 0; i < m_sp_MapGenerator.m_mapPosData.Count; i++)
+        {
+            m_actionCostMap.Add((int)DataBase.EN_MapCost.Default);
+            m_mapCost.Add((int)DataBase.EN_MapCost.Default);
+        }
+    }
+    
+    //
+    void CreateCanMoveMapID()
+    {
+        var moveCost = m_characterData[(int)m_playerTurnNum][(int)m_choiceCharacterID].MoveDist;
+        m_actionCostMap[(int)m_characterMapID[(int)m_playerTurnNum][(int)m_choiceCharacterID]] = (int)moveCost;
+
+        ConfirmationMapID((int)m_choiceMapID, (int)moveCost);
+
+        for (int i = 0; i < m_canMoveMapID.Count; i++)
+        {
+            Debug.Log(m_canMoveMapID[i]);
+        }
+
+        ResetMapCost();
+    }
+
+    /// <summary>
+    /// 再起呼び出し用
+    /// 
+    /// int choiceMapID : 現在選ばれているマップID
+    /// </summary>
+    void ConfirmationMapID(int choiceMapID, int moveCost)
+    {
+        var mapColumn = Mathf.Sqrt(m_mapCost.Count);
+
+        for (int i = moveCost; i >= 0; i--)
+        {
+            for (int j = 0; j < m_actionCostMap.Count; j++)
+            {
+                if (m_actionCostMap[j] == i)
+                {
+                    int upID = (int)choiceMapID - (int)mapColumn * (moveCost - i + 1);
+                    int downID = (int)choiceMapID + (int)mapColumn * (moveCost - i + 1);
+                    int rightID = (int)choiceMapID + 1 * (moveCost - i + 1);
+                    int leftID = (int)choiceMapID - 1 * (moveCost - i + 1);
+
+                    //選択されたマップの上
+                    if (upID >= 0)
+                    {
+                        Debug.Log("up " + i);
+                        j = SettingMapID(j, upID, i);
+                    }
+
+                    //選択されたマップの下
+                    if (downID < m_mapCost.Count)
+                    {
+                        Debug.Log("down " + i);
+                        j = SettingMapID(j, downID, i);
+                    }
+
+                    //選択されたマップの右
+                    if (choiceMapID < m_mapCost.Count && j % mapColumn != 0)
+                    {
+                        Debug.Log("right "+ i);
+                        j = SettingMapID(j, rightID, i);
+                    }
+
+                    //選択されたマップの左
+                    if (choiceMapID >= 0 && j % mapColumn != 0)
+                    {
+                        j = SettingMapID(j, leftID, i);
+                    }
+                }
+                //Debug.Log("J " + j);
+            }
+        }
+    }
+
+    int SettingMapID(int nowMapID, int nextMapID, int moveCost)
+    {
+        bool same = false;
+
+        for (int i = 0; i < m_canMoveMapID.Count; i++)
+        {
+            if(m_canMoveMapID[i].x == nowMapID)
+            {
+                same = true;
+                break;
+            }
+        }
+
+        Debug.Log("ne" + nowMapID);
+
+        if (m_actionCostMap[nowMapID] > 0 && !same)
+        {
+            Debug.Log(nextMapID);
+            if (m_mapCost[nowMapID] != (int)DataBase.EN_MapCost.NoEntry)
+            {
+                //マップコストデータを更新
+                m_canMoveMapID.Add(new Vector2((int)nowMapID, 0.0f));
+                m_actionCostMap[nextMapID] = moveCost + m_mapCost[nowMapID];
+                //moveCost += m_mapCost[nextMapID];
+                //ConfirmationMapID(nextMapID, m_actionCostMap[nextMapID]);
+                return 0;
+            }
+        }
+        return nowMapID;
+    }
+
+    void ResetMapCost()
+    {
+        for(int i = 0; i < m_actionCostMap.Count; i++)
+        {
+            m_actionCostMap[i] = (int)DataBase.EN_MapCost.Default;
+        }
+
+        for(int i = 0; i < m_canMoveMapID.Count; i++)
+        {
+            m_canMoveMapID.Clear();
         }
     }
 
     void DebugCreateMapData()
     {
-        for (int i = 0; i < m_sp_MapDataManager.m_mapPosData.Count; i++)
+        for (int i = 0; i < m_sp_MapGenerator.m_mapPosData.Count; i++)
         {
             m_mapDate.Add((int)DataBase.EN_MapState.Nothing);
         }
@@ -207,24 +373,23 @@ public class GameStageManagerScript: MonoBehaviour
         MenuStateNum = (int)DataBase.EN_MenuState.ChooseCommand;
         m_bVisibleCommandMenuUI = true;
 
-        //侵入不可かどうか確かめる
-        if (m_mapDate[(int)m_choiceMapID] != (int)DataBase.EN_MapState.NotAvailable)
+        //味方の数だけループ
+        for (int i = 0; i < m_characterMapID[(int)m_playerTurnNum].Count; i++)
         {
-            //味方の数だけループ
-            for (int i = 0; i < m_characterMapID[(int)m_playerTurnNum].Count; i++)
+            //選択したマップIDと同じ場所に味方がいるか判定
+            if (m_characterMapID[(int)m_playerTurnNum][i] == m_choiceMapID)
             {
-                //選択したマップIDと同じ場所に味方がいるか判定
-                if (m_characterMapID[(int)m_playerTurnNum][i] == m_choiceMapID)
-                {
-                    //味方のコマンド選択
-                    m_choiceCharacterID = (uint)i;
-                    Debug.Log("味方");
-                    return true;
-                }
+                //味方のコマンド選択
+                m_choiceCharacterID = (uint)i;
+                m_nowCommandData = m_characterCommandData[(int)m_playerTurnNum][i];
+                Debug.Log("味方");
+                return true;
             }
         }
-
         //ターン終了以外選択不可
+        m_nowCommandData.bAttacked = true;
+        m_nowCommandData.bMoved = true;
+        m_nowCommandData.bWaiting = true;
 
         Debug.Log("Enpty");
         return false;
@@ -242,6 +407,7 @@ public class GameStageManagerScript: MonoBehaviour
     /// <returns>攻撃できる場合trueを返す</returns>
     public bool ConfirmationAttack()
     {
+
         Debug.Log("攻撃判定_GameStageMnager");
         return false;
     }
@@ -252,7 +418,50 @@ public class GameStageManagerScript: MonoBehaviour
     /// <returns>移動できる場合trueを返す</returns>
     public bool ConfirmationMove()
     {
+        //侵入不可かどうか確かめる
+        if (m_mapDate[(int)m_choiceMapID] != (int)DataBase.EN_MapState.NotAvailable)
+        {
+            for(int i = 0; i < m_canMoveMapID.Count; i++)
+            {
+                Debug.Log("m_canMoveMapID " + m_canMoveMapID[(int)m_choiceMapID]);
+                if (m_canMoveMapID[i].x == (int)m_choiceMapID)
+                {
+                    var setPos = m_sp_MapGenerator.m_mapPosData[(int)m_choiceMapID];
+                    m_characterObj[(int)m_playerTurnNum][(int)m_choiceCharacterID].transform.position = new Vector3(setPos.x, setPos.y, 0.0f);
+                    m_characterMapID[(int)m_playerTurnNum][(int)m_choiceCharacterID] = m_choiceMapID;
+                    ResetMapCost();
+                    m_menuStateNum = (int)DataBase.EN_MenuState.ChoosePlayr;
+                    return true;
+                }
+            }
+        }
+        return true;
+    }
+
+    public void SettingActionCostMap()
+    {
+        //キャラの数だけループ
+        for (int i = 0; i < m_characterMapID.Count; i++)
+        {
+            for (int j = 0; j < m_characterMapID[i].Count; j++)
+            {
+                //m_actionCostMap[(int)m_characterMapID[i][j]] = (int)DataBase.EN_MapCost.NoEntry;
+
+                //選択したマップIDと同じ場所に味方がいるか判定
+                if ((int)m_characterMapID[i][j] == (int)DataBase.EN_MapCost.NoEntry)
+                {
+                }
+            };
+        }
         Debug.Log("移動判定_GameStageMnager");
-        return false;
+
+        CreateCanMoveMapID();
+    }
+
+    public void WaitCharactor()
+    {
+        DataBase.CharacterCommandData a = m_characterCommandData[(int)m_playerTurnNum][(int)m_choiceCharacterID];
+        m_characterCommandData[(int)m_playerTurnNum][(int)m_choiceCharacterID] = new DataBase.CharacterCommandData(true, true, true);
+        m_nowCommandData = new DataBase.CharacterCommandData(true, true, true);
     }
 }
