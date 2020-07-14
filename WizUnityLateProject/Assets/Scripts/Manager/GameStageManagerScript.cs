@@ -213,6 +213,7 @@ public class GameStageManagerScript: MonoBehaviour
     //キャラクターのマップデータをマネージャーに作成
     void CreateCharacterMapID()
     {
+        int num = 0;
         for (int i = 0; i < m_maxPlayerNum; i++)
         {
             m_characterMapID.Add(new List<uint>());
@@ -221,13 +222,10 @@ public class GameStageManagerScript: MonoBehaviour
             for (int j = 0; j < m_maxCharacterNum; j++)
             {
                 //デバッグ用のキャラクターの見た目を追加
-                m_characterMapID[i].Add(m_debugCharacterMapID[j + i * m_maxPlayerNum]);
-                //GameObject obj = Instantiate(m_character, new Vector3(
-                //    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].x,
-                //    m_sp_MapGenerator.m_mapPosData[(int)m_characterMapID[i][j]].y, 0.0f), 
-                //    new Quaternion(0.0f, 0.0f, 0.0f, 0.0f));
-
+                m_characterMapID[i].Add(m_debugCharacterMapID[num]);
                 //m_characterObj[i].Add(obj);
+
+                num++;
             }
         }
     }
